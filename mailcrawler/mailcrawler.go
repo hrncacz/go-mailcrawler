@@ -1,11 +1,16 @@
 package mailcrawler
 
 import (
-	"GOLANG/config"
 	"io"
 	"log"
 	"os"
+	"path/filepath"
 	"regexp"
+	"strconv"
+	"time"
+
+	"example.com/config"
+	"example.com/dbhandler"
 
 	"github.com/emersion/go-imap"
 	"github.com/emersion/go-imap/client"
@@ -22,8 +27,6 @@ func MailCrawler(emailConf config.Email) {
 		log.Fatal(err)
 	}
 	log.Println("Connected")
-	validMails := new(imap.SeqSet)
-	invalidMails := new(imap.SeqSet)
 
 	defer c.Logout()
 
@@ -48,7 +51,10 @@ func MailCrawler(emailConf config.Email) {
 		done <- c.Fetch(seqset, []imap.FetchItem{section.FetchItem(), imap.FetchUid}, messages)
 	}()
 	for msg := range messages {
+
 		hasPdfAttachment := false
+		var emailLog dbhandler.Email
+		var attachmentsArray []string
 		if msg == nil {
 			log.Fatal("Server didn't return message!")
 		}
@@ -61,7 +67,12 @@ func MailCrawler(emailConf config.Email) {
 		if err != nil {
 			log.Fatal(err)
 		}
-
+		emailLog.Uuid = uuid.NewString()
+		emailLog.HasPdfAttachment = 0
+		emailLog.Completed = 1
+		emailLog.Sender = mr.Header.Get("From")
+		emailLog.Date = mr.Header.Get("Date")
+		emailLog.Subject = mr.Header.Get("Subject")
 		for {
 			p, err := mr.NextPart()
 			if err == io.EOF {
@@ -71,11 +82,15 @@ func MailCrawler(emailConf config.Email) {
 			}
 			switch h := p.Header.(type) {
 			case *mail.AttachmentHeader:
+				log.Println("Attachment found")
+				var attachmentLog dbhandler.Attachment
 				filename, _ := h.Filename()
 				if pdf.MatchString(filename) {
 					hasPdfAttachment = true
 					log.Println(filename)
-					file, err := os.Create(emailConf.DownloadFolder + uuid.NewString())
+					genUuid := "a" + uuid.NewString()
+					newFilename := genUuid + ".pdf"
+					file, err := os.Create(filepath.Join(emailConf.DownloadFolder, newFilename))
 					if err != nil {
 						log.Fatal(err)
 					}
@@ -84,20 +99,35 @@ func MailCrawler(emailConf config.Email) {
 						log.Fatal(err)
 					}
 					log.Printf("Saved %v bytes into %v\n", size, filename)
+					attachmentLog.Uuid = genUuid
+					attachmentLog.FromEmail = emailLog.Uuid
+					attachmentLog.DateOfDownload = strconv.FormatInt(time.Now().Unix(), 10)
+					attachmentLog.OgFilename = filename
+					attachmentLog.NewFilename = newFilename
+					attachmentLog.FileProcessed = 0
+					attachmentsArray = append(attachmentsArray, genUuid)
+					emailLog.HasPdfAttachment = 1
+					emailLog.Completed = 0
+					dbhandler.LogAttachment(attachmentLog)
 				}
 			}
 		}
-
-		if hasPdfAttachment {
-			validMails.AddNum(msg.Uid)
-		} else {
-			invalidMails.AddNum(msg.Uid)
+		for i, item := range attachmentsArray {
+			if i != 0 {
+				emailLog.AttachmentsUuidArrray += ","
+			}
+			emailLog.AttachmentsUuidArrray += item
 		}
+		dbhandler.LogEmail(emailLog)
+		if hasPdfAttachment {
+			// log.Println("Moving email from inbox")
+			// c.UidMove(validMails, "MARTINOK")
+		} else {
+			// c.UidMove(invalidMails, "MARTINNOK")
+			// log.Println("Emails moved")
+		}
+
 	}
-	// log.Println("Moving email from inbox")
-	// c.UidMove(validMails, "MARTINOK")
-	// c.UidMove(invalidMails, "MARTINNOK")
-	// log.Println("Emails moved")
 
 	if err := <-done; err != nil {
 		log.Fatal(err)
