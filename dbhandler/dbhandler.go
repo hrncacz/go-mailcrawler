@@ -3,6 +3,7 @@ package dbhandler
 import (
 	"database/sql"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -56,64 +57,86 @@ func EmailIsProcessed(emailUuid string) {
 	database, err := sql.Open("sqlite3", dbPath())
 	checkErr(err)
 	defer database.Close()
-	_, err = database.Exec(fmt.Sprintf("UPDATE emails SET completed = 1 WHERE uuid=\"%s\"", emailUuid))
+	statement, err := database.Prepare(`UPDATE emails SET completed=1 WHERE uuid=$1`)
 	checkErr(err)
+	defer statement.Close()
+	statement.Exec(emailUuid)
 }
 
 func AttachmentIsProcessed(attachmentUuid string) {
 	database, err := sql.Open("sqlite3", dbPath())
 	checkErr(err)
 	defer database.Close()
-	_, err = database.Exec(fmt.Sprintf("UPDATE attachments SET fileProcessed = 1 WHERE uuid=\"%s\"", attachmentUuid))
+	statement, err := database.Prepare(`UPDATE attachments SET fileProcessed=1 WHERE uuid=$1`)
+	checkErr(err)
+	defer statement.Close()
+	statement.Exec(attachmentUuid)
 }
 
 func EmailGetStatus(emailUuid string) int8 {
 	database, _ := sql.Open("sqlite3", dbPath())
 	defer database.Close()
 	var status int8
-	rows, _ := database.Query(fmt.Sprintf("SELECT fileProcessed FROM attachments WHERE uuid=\"%s\"", emailUuid))
-	if rows.Next() {
-		rows.Scan(&status)
+	row := database.QueryRow(`SELECT fileProcessed FROM attachments WHERE uuid=$1`, emailUuid)
+	switch err := row.Scan(&status); err {
+	case sql.ErrNoRows:
+		status = 0
+		return status
+	case nil:
+		return status
+	default:
+		return 0
 	}
-	return status
 }
 
 func AttachmentGetStatus(attachmentUuid string) int8 {
-	database, _ := sql.Open("sqlite3", dbPath())
-	defer database.Close()
-	var status int8
-	rows, err := database.Query(fmt.Sprintf("SELECT fileProcessed FROM attachments WHERE uuid=\"%v\"", attachmentUuid))
-	checkErr(err)
-	for rows.Next() {
-		rows.Scan(&status)
-	}
-	return status
-}
-
-func GetEmail(attachmentUuid string) Email {
 	database, err := sql.Open("sqlite3", dbPath())
 	checkErr(err)
 	defer database.Close()
-	var emailUuid Email
-	rows, _ := database.Query(fmt.Sprintf("SELECT * FROM attachments WHERE uuid=\"%s\"", attachmentUuid))
-	if rows.Next() {
-		rows.Scan(&emailUuid)
+	var status int8
+	row := database.QueryRow(`SELECT fileProcessed FROM attachments WHERE uuid=$1`, attachmentUuid)
+	switch err := row.Scan(&status); err {
+	case sql.ErrNoRows:
+		status = 0
+		return status
+	case nil:
+		return status
+	default:
+		return 0
 	}
-	return emailUuid
+}
+
+func GetEmail(attachmentUuid string) (emailUuid string, attachmentsUuidArrray string, err error) {
+	database, err := sql.Open("sqlite3", dbPath())
+	checkErr(err)
+	defer database.Close()
+	row := database.QueryRow(`SELECT fromEmail FROM attachments WHERE uuid=$1`, attachmentUuid)
+	err = row.Scan(&emailUuid)
+	checkErr(err)
+	row = database.QueryRow(`SELECT attachments FROM emails WHERE uuid=$1`, emailUuid)
+	switch err := row.Scan(&attachmentsUuidArrray); err {
+	case sql.ErrNoRows:
+		return "", "", err
+	default:
+		log.Println(attachmentsUuidArrray)
+		return emailUuid, attachmentsUuidArrray, nil
+	}
 }
 
 func AllAttachmentsComplete(attachmentUuid string) {
-	email := GetEmail(attachmentUuid)
-	isComplete := true
-	attachmentsArray := strings.Split(email.AttachmentsUuidArrray, ",")
-	for _, item := range attachmentsArray {
-		attachmentStatus := AttachmentGetStatus(item)
-		if attachmentStatus == 0 {
-			isComplete = false
+	emailUuid, attachmentsUuidArrray, err := GetEmail(attachmentUuid)
+	if err == nil {
+		isComplete := true
+		attachmentsArray := strings.Split(attachmentsUuidArrray, ",")
+		for _, item := range attachmentsArray {
+			attachmentStatus := AttachmentGetStatus(item)
+			if attachmentStatus == 0 {
+				isComplete = false
+			}
 		}
-	}
-	if isComplete == true {
-		EmailIsProcessed(email.Uuid)
+		if isComplete == true {
+			EmailIsProcessed(emailUuid)
+		}
 	}
 }
 

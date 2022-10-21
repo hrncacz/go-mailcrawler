@@ -35,11 +35,13 @@ func MailCrawler(emailConf config.Email) {
 	}
 	done := make(chan error, 1)
 
-	mbox, err := c.Select("MARTIN", false)
+	mbox, err := c.Select(emailConf.Paths.Source, false)
 	if err != nil {
 		log.Fatal(err)
 	}
-	log.Println(mbox.Messages)
+	if mbox.Messages == 0 {
+		return
+	}
 	seqset := new(imap.SeqSet)
 	seqset.AddRange(uint32(1), mbox.Messages)
 
@@ -51,7 +53,8 @@ func MailCrawler(emailConf config.Email) {
 		done <- c.Fetch(seqset, []imap.FetchItem{section.FetchItem(), imap.FetchUid}, messages)
 	}()
 	for msg := range messages {
-
+		validMails := new(imap.SeqSet)
+		invalidMails := new(imap.SeqSet)
 		hasPdfAttachment := false
 		var emailLog dbhandler.Email
 		var attachmentsArray []string
@@ -120,10 +123,14 @@ func MailCrawler(emailConf config.Email) {
 		}
 		dbhandler.LogEmail(emailLog)
 		if hasPdfAttachment {
+			validMails.AddNum(msg.Uid)
+			c.UidMove(validMails, emailConf.Paths.ProcessedMails)
 			// log.Println("Moving email from inbox")
-			// c.UidMove(validMails, "MARTINOK")
+			//c.UidMove(validMails, "MARTINOK")
 		} else {
-			// c.UidMove(invalidMails, "MARTINNOK")
+			invalidMails.AddNum(msg.Uid)
+			c.UidMove(invalidMails, emailConf.Paths.InvalidMails)
+			//c.UidMove(invalidMails, "MARTINNOK")
 			// log.Println("Emails moved")
 		}
 

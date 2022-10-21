@@ -9,6 +9,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"example.com/config"
@@ -28,9 +29,7 @@ func FtpUploadDownload(ftpConf config.Ftp) {
 	// Parse Host and Port
 	host := ftpConf.Auth.Host
 	// Default SFTP port
-	port := 22
-
-	//hostKey := getHostKey(host)
+	port := ftpConf.Auth.Port
 
 	fmt.Fprintf(os.Stdout, "Connecting to %s ...\n", host)
 
@@ -47,16 +46,23 @@ func FtpUploadDownload(ftpConf config.Ftp) {
 		auths = append(auths, ssh.Password(pass))
 	}
 
-	// Initialize client configuration
-	config := ssh.ClientConfig{
-		User: user,
-		Auth: auths,
-		// Uncomment to ignore host key check
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
-		//HostKeyCallback: ssh.FixedHostKey(hostKey),
+	var hostKeyCallback ssh.HostKeyCallback
+
+	if ftpConf.Auth.Secure {
+		hostKey := getHostKey(host)
+		hostKeyCallback = ssh.FixedHostKey(hostKey)
+	} else {
+		hostKeyCallback = ssh.InsecureIgnoreHostKey()
 	}
 
-	addr := fmt.Sprintf("%s:%d", host, port)
+	// Initialize client configuration
+	config := ssh.ClientConfig{
+		User:            user,
+		Auth:            auths,
+		HostKeyCallback: hostKeyCallback,
+	}
+
+	addr := fmt.Sprintf("%s:%s", host, port)
 
 	// Connect to server
 	conn, err := ssh.Dial("tcp", addr, &config)
@@ -85,7 +91,7 @@ func FtpUploadDownload(ftpConf config.Ftp) {
 
 	for _, file := range filesToUpload {
 		localFile := filepath.Join(ftpConf.UploadFolder, file)
-		remoteFile := filepath.Join(ftpConf.RemoteUp, file)
+		remoteFile := sftp.Join(ftpConf.RemoteUp, file)
 		localFileArchive := filepath.Join(ftpConf.UploadArchive, file)
 		uploadFile(sc, localFile, remoteFile)
 		moveFile(localFile, localFileArchive)
@@ -99,12 +105,18 @@ func FtpUploadDownload(ftpConf config.Ftp) {
 
 	for _, file := range filesToDownload {
 		_, attachmentUuid := splitExportedFilename(file)
-		if dbhandler.AttachmentGetStatus(attachmentUuid) == 0 {
+		if dbhandler.AttachmentGetStatus(attachmentUuid) == 0 || isIsdoc(file) {
+			log.Println(dbhandler.AttachmentGetStatus(attachmentUuid))
 			localFile := filepath.Join(ftpConf.DownloadFolder, file)
-			remoteFile := filepath.Join(ftpConf.RemoteDown, file)
+			remoteFile := sftp.Join(ftpConf.RemoteDown, file)
 			downloadFile(sc, remoteFile, localFile, attachmentUuid)
 		}
 	}
+}
+
+func isIsdoc(file string) bool {
+	isdoc := regexp.MustCompile("(?i).isdoc")
+	return isdoc.MatchString(file)
 }
 
 func splitExportedFilename(filename string) (string, string) {
@@ -220,7 +232,8 @@ func uploadFile(sc *sftp.Client, localFile, remoteFile string) (err error) {
 	// }
 
 	// Note: SFTP To Go doesn't support O_RDWR mode
-	dstFile, err := sc.OpenFile(remoteFile, (os.O_WRONLY | os.O_CREATE | os.O_TRUNC))
+	dstFile, err := sc.OpenFile(remoteFile, os.O_WRONLY|os.O_CREATE|os.O_TRUNC)
+	// dstFile, err := sc.Create(remoteFile)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Unable to open remote file: %v\n", err)
 		return
@@ -273,8 +286,10 @@ func downloadFile(sc *sftp.Client, remoteFile, localFile, attachmentUuid string)
 		os.Exit(1)
 	}
 	fmt.Fprintf(os.Stdout, "%d bytes copied\n", bytes)
-	dbhandler.AttachmentIsProcessed(attachmentUuid)
-	dbhandler.AllAttachmentsComplete(attachmentUuid)
-
+	pdf := regexp.MustCompile("(?i).pdf")
+	if pdf.MatchString(remoteFile) {
+		dbhandler.AttachmentIsProcessed(attachmentUuid)
+		dbhandler.AllAttachmentsComplete(attachmentUuid)
+	}
 	return
 }

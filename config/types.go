@@ -33,11 +33,13 @@ type AuthEmail struct {
 }
 type AuthFtp struct {
 	Host     string
+	Port     string
 	Secure   bool
 	User     string
 	Password string
 }
 type Paths struct {
+	Source         string
 	ProcessedMails string
 	InvalidMails   string
 }
