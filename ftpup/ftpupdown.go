@@ -105,18 +105,26 @@ func FtpUploadDownload(ftpConf config.Ftp) {
 
 	for _, file := range filesToDownload {
 		_, attachmentUuid := splitExportedFilename(file)
-		if dbhandler.AttachmentGetStatus(attachmentUuid) == 0 || isIsdoc(file) {
-			log.Println(dbhandler.AttachmentGetStatus(attachmentUuid))
+		if dbhandler.AttachmentGetStatus(attachmentUuid) == 0 {
+			isdocFile := isdocFilename(file)
 			localFile := filepath.Join(ftpConf.DownloadFolder, file)
 			remoteFile := sftp.Join(ftpConf.RemoteDown, file)
+			localFileIsdoc := filepath.Join(ftpConf.DownloadFolder, isdocFile)
+			remoteFileIsdoc := sftp.Join(ftpConf.RemoteDown, isdocFile)
 			downloadFile(sc, remoteFile, localFile, attachmentUuid)
+			downloadFile(sc, remoteFileIsdoc, localFileIsdoc, attachmentUuid)
 		}
 	}
 }
 
-func isIsdoc(file string) bool {
-	isdoc := regexp.MustCompile("(?i).isdoc")
-	return isdoc.MatchString(file)
+func isdocFilename(file string) string {
+	var filename string
+	stringArray := strings.SplitAfter(file, ".")
+	stringArray[len(stringArray)-1] = "isdoc"
+	for _, item := range stringArray {
+		filename += item
+	}
+	return filename
 }
 
 func splitExportedFilename(filename string) (string, string) {
@@ -194,6 +202,7 @@ func getFilesToUpload(dirName string) ([]string, error) {
 func getFilesToDownload(sc *sftp.Client, remoteDir string) ([]string, error) {
 	fmt.Fprintf(os.Stdout, "Listing [%s] ...\n\n", remoteDir)
 	var filesToDownload []string
+	pdf := regexp.MustCompile("(?i).pdf")
 
 	files, err := sc.ReadDir(remoteDir)
 	if err != nil {
@@ -202,7 +211,9 @@ func getFilesToDownload(sc *sftp.Client, remoteDir string) ([]string, error) {
 	}
 
 	for _, file := range files {
-		if !file.IsDir() {
+		log.Println(file.Name())
+		if !file.IsDir() && pdf.MatchString(file.Name()) {
+
 			filesToDownload = append(filesToDownload, file.Name())
 		}
 	}
