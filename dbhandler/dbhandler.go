@@ -34,7 +34,7 @@ func InitTables() {
 	defer database.Close()
 	database.Exec("CREATE TABLE IF NOT EXISTS emails(uuid TEXT, date TEXT, subject TEXT, sender TEXT, hasPdfAttachment INTEGER, attachments, completed)")
 	database.Exec("CREATE TABLE IF NOT EXISTS attachments(uuid, fromEmail, dateOfDownload, ogFilename, newFilename, fileProcessed)")
-
+	obří kokot
 }
 
 func LogEmail(email Email) {
