@@ -112,6 +112,8 @@ func MailCrawler(emailConf config.Email) {
 					emailLog.HasPdfAttachment = 1
 					emailLog.Completed = 0
 					dbhandler.LogAttachment(attachmentLog)
+					file.Close()
+					file.Sync()
 				}
 			}
 		}
