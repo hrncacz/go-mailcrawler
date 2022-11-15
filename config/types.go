@@ -4,6 +4,7 @@ package config
 type Config struct {
 	Email Email
 	Ftp   Ftp
+	Sap   Sap
 }
 
 // Level 1
@@ -21,6 +22,12 @@ type Ftp struct {
 	UploadArchive  string
 	RemoteUp       string
 	RemoteDown     string
+}
+
+type Sap struct {
+	Path     string
+	Username string
+	Password string
 }
 
 // Level 2

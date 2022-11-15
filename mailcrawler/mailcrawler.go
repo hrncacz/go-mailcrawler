@@ -126,12 +126,12 @@ func MailCrawler(emailConf config.Email) {
 		dbhandler.LogEmail(emailLog)
 		if hasPdfAttachment {
 			validMails.AddNum(msg.Uid)
-			c.UidMove(validMails, emailConf.Paths.ProcessedMails)
+			//c.UidMove(validMails, emailConf.Paths.ProcessedMails)
 			// log.Println("Moving email from inbox")
 			//c.UidMove(validMails, "MARTINOK")
 		} else {
 			invalidMails.AddNum(msg.Uid)
-			c.UidMove(invalidMails, emailConf.Paths.InvalidMails)
+			//c.UidMove(invalidMails, emailConf.Paths.InvalidMails)
 			//c.UidMove(invalidMails, "MARTINNOK")
 			// log.Println("Emails moved")
 		}
