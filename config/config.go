@@ -2,7 +2,6 @@ package config
 
 import (
 	"encoding/json"
-	"fmt"
 	"log"
 	"os"
 	"path/filepath"
@@ -24,7 +23,6 @@ func GetConfig() (Config, error) {
 		path = "config/config.json"
 	}
 
-	log.Println(path)
 	_, err := os.Stat(path)
 	if err == nil {
 		file, _ := os.Open(path)
@@ -34,7 +32,7 @@ func GetConfig() (Config, error) {
 		decoder := json.NewDecoder(file)
 		errorDecode := decoder.Decode(&configuration)
 		if errorDecode != nil {
-			fmt.Println("Error: ", errorDecode)
+			log.Fatalln("Error: ", errorDecode)
 		}
 		return configuration, errorDecode
 	}
