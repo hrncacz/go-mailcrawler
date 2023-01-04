@@ -83,13 +83,13 @@ func MailCrawler(emailConf config.Email) {
 		emailLog.Uuid = uuid.NewString()
 		emailLog.HasPdfAttachment = 0
 		emailLog.Completed = 1
-		emailLog.Sender = getSender(decodeString(mr.Header.Get("From")))
+		emailLog.Sender = GetSender(DecodeString(mr.Header.Get("From")))
 
 		mailServerTimeTemplate := "Mon, 2 Jan 2006 15:04:05 -0700"
-		mailserverTime, _ := time.Parse(mailServerTimeTemplate, decodeString(mr.Header.Get("Date")))
+		mailserverTime, _ := time.Parse(mailServerTimeTemplate, DecodeString(mr.Header.Get("Date")))
 		sapTimeTemplate := "20060102"
 		emailLog.Date = mailserverTime.Format(sapTimeTemplate)
-		emailLog.Subject = decodeString(mr.Header.Get("Subject"))
+		emailLog.Subject = DecodeString(mr.Header.Get("Subject"))
 
 		for {
 			p, err := mr.NextPart()
@@ -118,14 +118,14 @@ func MailCrawler(emailConf config.Email) {
 					attachmentLog.Uuid = genUuid
 					attachmentLog.FromEmail = emailLog.Uuid
 					attachmentLog.DateOfDownload = time.Now().Format("20060102")
-					attachmentLog.OgFilename = decodeString(filename)
+					attachmentLog.OgFilename = DecodeString(filename)
 					attachmentLog.NewFilename = newFilename
 					attachmentLog.FileProcessed = 0
 					attachmentsArray = append(attachmentsArray, genUuid)
 					emailLog.HasPdfAttachment = 1
 					emailLog.Completed = 0
 					dbhandler.LogAttachment(attachmentLog)
-					sapAttachmentLog = append(sapAttachmentLog, prepareAttachmentForSapLog(attachmentLog))
+					sapAttachmentLog = append(sapAttachmentLog, PrepareAttachmentForSapLog(attachmentLog))
 					file.Close()
 					file.Sync()
 				}
@@ -138,7 +138,7 @@ func MailCrawler(emailConf config.Email) {
 			emailLog.AttachmentsUuidArrray += item
 		}
 		dbhandler.LogEmail(emailLog)
-		sapEmailLog = append(sapEmailLog, prepareEmailForSapLog(emailLog))
+		sapEmailLog = append(sapEmailLog, PrepareEmailForSapLog(emailLog))
 		if hasPdfAttachment {
 			validMails.AddNum(msg.Uid)
 			//c.UidMove(validMails, emailConf.Paths.ProcessedMails)
@@ -162,7 +162,7 @@ func MailCrawler(emailConf config.Email) {
 
 }
 
-func prepareEmailForSapLog(emailLog dbhandler.Email) sapcomm.SapEmailItem {
+func PrepareEmailForSapLog(emailLog dbhandler.Email) sapcomm.SapEmailItem {
 	var sapEmailItem sapcomm.SapEmailItem
 	sapEmailItem.EMLUUID = emailLog.Uuid
 	sapEmailItem.CLIENT = 100
@@ -176,7 +176,7 @@ func prepareEmailForSapLog(emailLog dbhandler.Email) sapcomm.SapEmailItem {
 	return sapEmailItem
 }
 
-func prepareAttachmentForSapLog(attachmentLog dbhandler.Attachment) sapcomm.SapAttachmentItem {
+func PrepareAttachmentForSapLog(attachmentLog dbhandler.Attachment) sapcomm.SapAttachmentItem {
 	var sapAttachmentItem sapcomm.SapAttachmentItem
 	sapAttachmentItem.UUID = attachmentLog.Uuid
 	sapAttachmentItem.FROMEMAIL = attachmentLog.FromEmail
@@ -189,7 +189,7 @@ func prepareAttachmentForSapLog(attachmentLog dbhandler.Attachment) sapcomm.SapA
 	return sapAttachmentItem
 }
 
-func getSender(fromHeader string) string {
+func GetSender(fromHeader string) string {
 	re := regexp.MustCompile(`<.*@.*\..*>`)
 	result := re.FindString(fromHeader)
 	result = strings.ReplaceAll(result, "<", "")
@@ -197,11 +197,10 @@ func getSender(fromHeader string) string {
 	return result
 }
 
-func decodeString(textToDecode string) string {
+func DecodeString(textToDecode string) string {
 
 	dec := new(mime.WordDecoder)
 	dec.CharsetReader = func(chs string, input io.Reader) (io.Reader, error) {
-		log.Println(chs)
 		switch chs {
 		case "iso-8859-2":
 			r, err := charset.NewReaderLabel(chs, input)

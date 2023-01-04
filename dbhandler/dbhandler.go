@@ -122,6 +122,38 @@ func GetEmail(attachmentUuid string) (emailUuid string, attachmentsUuidArrray st
 	}
 }
 
+func GetAllEmails() (emails []Email, err error) {
+	database, err := sql.Open("sqlite3", dbPath())
+	checkErr(err)
+	defer database.Close()
+	rows, err := database.Query(`SELECT * FROM emails`)
+	checkErr(err)
+	defer rows.Close()
+	for rows.Next() {
+		var tmpEmailObj Email
+		err = rows.Scan(&tmpEmailObj.Uuid, &tmpEmailObj.Date, &tmpEmailObj.Subject, &tmpEmailObj.Sender, &tmpEmailObj.HasPdfAttachment, &tmpEmailObj.AttachmentsUuidArrray, &tmpEmailObj.Completed)
+		checkErr(err)
+		emails = append(emails, tmpEmailObj)
+	}
+	return emails, nil
+}
+
+func GetAllAttachments() (attachments []Attachment, err error) {
+	database, err := sql.Open("sqlite3", dbPath())
+	checkErr(err)
+	defer database.Close()
+	rows, err := database.Query(`SELECT * FROM attachments`)
+	checkErr(err)
+	defer rows.Close()
+	for rows.Next() {
+		var tmpAttachmentObj Attachment
+		err = rows.Scan(&tmpAttachmentObj.Uuid, &tmpAttachmentObj.FromEmail, &tmpAttachmentObj.DateOfDownload, &tmpAttachmentObj.OgFilename, &tmpAttachmentObj.NewFilename, &tmpAttachmentObj.FileProcessed)
+		checkErr(err)
+		attachments = append(attachments, tmpAttachmentObj)
+	}
+	return attachments, nil
+}
+
 func AllAttachmentsComplete(attachmentUuid string) {
 	emailUuid, attachmentsUuidArrray, err := GetEmail(attachmentUuid)
 	if err == nil {
